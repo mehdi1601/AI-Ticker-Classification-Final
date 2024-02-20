@@ -1,7 +1,11 @@
+# Mehdi Dahlouk
+# Class: C964 Capstone Task 2
+# Program Name: AI Ticket Classifier
 
 import matplotlib.pyplot as plt
 import nltk
 import pandas as pd
+import os  # For directory operations
 from flask import Flask, render_template, request
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -11,6 +15,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.pipeline import Pipeline
+from wordcloud import WordCloud  
+from sklearn.model_selection import learning_curve
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -148,36 +154,54 @@ grid_search = GridSearchCV(pipeline, param_grid, cv=5, verbose=2, n_jobs=-1)
 grid_search.fit(X_train, y_train)
 
 
-def generate_f1_accuracy_graph(y_test, y_pred):
-    # Calculate F1 score for each class
-    f1_scores = f1_score(y_test, y_pred, average=None)
-    classes = grid_search.best_estimator_.classes_
+# Function to generate word cloud from ticket descriptions
+def generate_word_cloud(text_data):
+    wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text_data)
+    wordcloud.to_file('static/wordcloud.png')  # Save the word cloud as an image file
+    return 'wordcloud.png'
 
-    # Plot the F1 scores
+def generate_ticket_length_histogram(df):
+    if not os.path.exists('static'):
+        os.makedirs('static')
+
+    ticket_lengths = df['Ticket Description'].str.split().apply(len)
     plt.figure(figsize=(10, 6))
-    plt.bar(classes, f1_scores, color='skyblue')
-    plt.xlabel('Ticket Type')
-    plt.ylabel('F1 Score')
-    plt.title('F1 Score by Ticket Type')
-    plt.ylim(0, 1)
-    plt.xticks(rotation=45)
+    plt.hist(ticket_lengths, bins=20, color='skyblue', edgecolor='black')
+    plt.title('Distribution of Ticket Lengths')
+    plt.xlabel('Ticket Length (Number of Words)')
+    plt.ylabel('Frequency')
 
-    # Save the plot to a file
-    graph_file = 'f1_graph.png'
-    plt.savefig(graph_file, format='png', bbox_inches='tight')
-    plt.close()
-    
-    return graph_file
+    histogram_file = 'static/ticket_length_histogram.png'
+    plt.savefig(histogram_file)
+    plt.clf()
 
+    return histogram_file
+# Function to generate Learning Curve for our Analysis
+def generate_learning_curve(estimator, X, y):
+    train_sizes, train_scores, test_scores = learning_curve(
+        estimator, X, y, cv=5, train_sizes=np.linspace(0.1, 1.0, 10), n_jobs=-1)
 
-# Load and preprocess dataset
-df = pd.read_csv('data_set/customer_support_tickets.csv')
-df['Ticket Description'] = df['Ticket Description'].astype(str).apply(preprocess_text)
+    train_mean = np.mean(train_scores, axis=1)
+    train_std = np.std(train_scores, axis=1)
+    test_mean = np.mean(test_scores, axis=1)
+    test_std = np.std(test_scores, axis=1)
 
-# Print preprocessed data from lines 1 to 14
-print("Preprocessed data from lines 1 to 14:")
-for i in range(14):
-    print(df['Ticket Description'][i])
+    plt.figure(figsize=(10, 6))
+    plt.plot(train_sizes, train_mean, label='Training score', color='blue')
+    plt.fill_between(train_sizes, train_mean - train_std, train_mean + train_std, color='blue', alpha=0.1)
+    plt.plot(train_sizes, test_mean, label='Cross-validation score', color='orange')
+    plt.fill_between(train_sizes, test_mean - test_std, test_mean + test_std, color='orange', alpha=0.1)
+    plt.title('Learning Curve')
+    plt.xlabel('Training Examples')
+    plt.ylabel('Score')
+    plt.legend()
+    plt.grid(True)
+
+    learning_curve_file = 'static/learning_curve.png'
+    plt.savefig(learning_curve_file)
+    plt.clf()
+
+    return learning_curve_file
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -187,17 +211,27 @@ def index():
         return render_template('result.html', category=predicted_category, ticket_text=user_input)
     return render_template('index.html')
 
-@app.route('/graph')
-def graph():
-    # Predict on the test data
-    y_pred = grid_search.predict(X_test)
+@app.route('/wordcloud')
+def wordcloud():
+    # Generate word cloud from the ticket descriptions
+    text_data = ' '.join(df['Ticket Description'])  # Concatenate all ticket descriptions into a single string
+    wordcloud_image = generate_word_cloud(text_data)
 
-    # Generate F1 accuracy graph and get the filename
-    f1_graph_file = generate_f1_accuracy_graph(y_test, y_pred)
+    # Pass the filename of the word cloud image to the template
+    return render_template('index.html', wordcloud_image=wordcloud_image)
 
-    # Pass the filename to the template
-    return render_template('index.html', f1_graph_file=f1_graph_file)
+@app.route('/error_graph')
+def error_graph():
+    # Generate the graph and get the file path
+    graph_image = generate_error_graph()
+
+    # Extract the filename for use in the template
+    filename = graph_image.split('/')[-1]
+
+    # Render a template and pass the filename of the graph image
+    return render_template('show_graph.html', graph_image=filename)
+
 
 
 if __name__ == "__main__":
-  app.run(host='0.0.0.0', port=8080, debug=False)
+    app.run(host='0.0.0.0', port=8080, debug=False)

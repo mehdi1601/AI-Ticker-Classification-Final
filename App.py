@@ -1,3 +1,7 @@
+# Mehdi Dahlouk
+# Class: C964 Capstone Task 2
+# Program Name: AI Ticket Classifier
+
 import pandas as pd
 import nltk
 from nltk.corpus import stopwords

@@ -11,5 +11,5 @@ language = "python3"
 
 [deployment]
 deploymentTarget = "static"
-publicDir = "http://127.0.0.1:8080/index.html"
+publicDir = "http://172.31.196.30:8080/index.html"
 
